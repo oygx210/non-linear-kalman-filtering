@@ -5,7 +5,7 @@ R = sqrt(x(1)^2 + x(2)^2);
 % Current velocity
 V = sqrt(x(3)^2 + x(4)^2);
 % Some parameter
-beta_o = 0.59783;
+beta_o = 0.59783*exp(x(5));
 beta = beta_o;
 Ho = 13.406;
 Gmo = 3.9860e5;
@@ -14,5 +14,5 @@ Ro = 6374;
 D = -beta*exp((Ro - R)/Ho)*V;
 % Gravitationoal force
 G = -Gmo/R^3;
-dxdt = [x(3); x(4); D*x(3) + G*x(1); D*x(4) + G*x(2)];
+dxdt = [x(3); x(4); D*x(3) + G*x(1); D*x(4) + G*x(2); 0];
 end

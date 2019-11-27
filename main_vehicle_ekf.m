@@ -1,10 +1,10 @@
 % Your initial state guess at time k, utilizing measurements up to time k-1: xhat[k|k-1]
 % True Initial state: xhat[k|k-1]
-initialState = [6500.4; 349.14; -1.8093; -6.7967];
+initialState = [6500.4; 349.14; -1.8093; -6.7967; 0.6932];
 % Guess of intiial state (Not same in general)
-initialStateGuess = [6500.4; 349.14; -1.8093; -6.7967]; % xhat[k|k-1]
+initialStateGuess = [6500.4; 349.14; -1.8093; -6.7967; 0]; % xhat[k|k-1]
 % Guess of initial covariance
-initialCovarianceGuess = diag([10e-6 10e-6 10e-6 10e-6]); 
+initialCovarianceGuess = diag([1e-6 1e-6 1e-6 1e-6 1]); 
 % Construct the filter
 ekf = extendedKalmanFilter(...
     @vehicleStateFcn,... % State transition function
@@ -12,14 +12,17 @@ ekf = extendedKalmanFilter(...
     initialStateGuess);
 
 % Covariance of the process noise 
-ekf.ProcessNoise = diag([0 0 2.4064e-5 2.4064e-5]);
+ukf.ProcessNoise = diag([0 0 2.4064e-5 2.4064e-5 0]);
+
+% Initial covariance pi_o
+ukf.StateCovariance = initialCovarianceGuess;
 
 % Covariance Matrix of the measurement noise v[k]
 R = diag([1e-3 17e-3]);
-ekf.MeasurementNoise = R;
+ukf.MeasurementNoise = R;
 
 % Get true trajectory for x[1:4] noise-less measurements
-% ODE update rate is every 50ms
+% ODE update rate is every 100ms
 T = 0.05; % [s] Filter sample time
 % Siumlate for a time of 200s
 timeVector = 0:T:200;
@@ -37,8 +40,8 @@ yTrue = vehicleMeasurementFcn2(xTrue);
 yMeas = yTrue + randn(size(yTrue))*sqrt(R);
 
 Nsteps = size(yMeas, 1); % Number of time steps
-xCorrectedUKF = zeros(Nsteps, 4); % Corrected state estimates
-PCorrected = zeros(Nsteps, 4, 4); % Corrected state estimation error covariances
+xCorrectedUKF = zeros(Nsteps, 5); % Corrected state estimates
+PCorrected = zeros(Nsteps, 5, 5); % Corrected state estimation error covariances
 e = zeros(Nsteps, 2); % Residuals (or innovations)
 
 for k=1:Nsteps
@@ -114,14 +117,14 @@ title('Autocorrelation of residuals (innovation)');
 eStates = xTrue-xCorrectedUKF;
 figure();
 subplot(2,1,1);
-plot(timeVector,eStates(:,1),...               % Error for the first state
+semilogy(timeVector,eStates(:,1),...               % Error for the first state
     timeVector, sqrt(PCorrected(:,1,1)),'r', ... % 1-sigma upper-bound
     timeVector, -sqrt(PCorrected(:,1,1)),'r');   % 1-sigma lower-bound
 xlabel('Time [s]');
 ylabel('Error for state 1');
 title('State estimation errors');
 subplot(2,1,2);
-plot(timeVector,eStates(:,2),...               % Error for the second state
+semilogy(timeVector,eStates(:,2),...               % Error for the second state
     timeVector,sqrt(PCorrected(:,2,2)),'r', ...  % 1-sigma upper-bound
     timeVector,-sqrt(PCorrected(:,2,2)),'r');    % 1-sigma lower-bound
 xlabel('Time [s]');
