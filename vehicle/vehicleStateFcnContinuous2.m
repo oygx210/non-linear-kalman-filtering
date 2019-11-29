@@ -5,8 +5,8 @@ R = sqrt(x(1)^2 + x(2)^2);
 % Current velocity
 V = sqrt(x(3)^2 + x(4)^2);
 % Some parameter
-beta_o = 0.59783*exp(x(5));
-beta = beta_o;
+beta_o = 0.59783;
+beta = beta_o*exp(x(5));
 Ho = 13.406;
 Gmo = 3.9860e5;
 Ro = 6374;

@@ -1,3 +1,4 @@
+%% UKF Part
 % Your initial state guess at time k, utilizing measurements up to time k-1: xhat[k|k-1]
 % True Initial state: xhat[k|k-1]
 initialState = [6500.4; 349.14; -1.8093; -6.7967; 0.6932];
@@ -6,7 +7,7 @@ initialStateGuess = [6500.4; 349.14; -1.8093; -6.7967; 0]; % xhat[k|k-1]
 % Guess of initial covariance
 initialCovarianceGuess = diag([1e-6 1e-6 1e-6 1e-6 1]); 
 % Construct the filter
-ekf = extendedKalmanFilter(...
+ukf = unscentedKalmanFilter(...
     @vehicleStateFcn,... % State transition function
     @vehicleMeasurementFcn,... % Measurement function
     initialStateGuess);
@@ -28,10 +29,6 @@ T = 0.05; % [s] Filter sample time
 timeVector = 0:T:200;
 % Get true noiseless samples
 [~, xTrue]=ode45(@vehicleStateFcnContinuous2,timeVector,initialState);
-%Plot them
-%plot(xTrue(:, 3), xTrue(:, 4))
-%ylim([-200 500])
-%xlim([6350 6500])
 
 % Corrupt clean samples using measurement noise covariance (This is known to designer)
 rng(1); % Fix the random number generator for reproducible results
@@ -41,31 +38,30 @@ yMeas = yTrue + randn(size(yTrue))*sqrt(R);
 
 Nsteps = size(yMeas, 1); % Number of time steps
 xCorrectedUKF = zeros(Nsteps, 5); % Corrected state estimates
-PCorrected = zeros(Nsteps, 5, 5); % Corrected state estimation error covariances
-e = zeros(Nsteps, 2); % Residuals (or innovations)
+PCorrectedUKF = zeros(Nsteps, 5, 5); % Corrected state estimation error covariances
+eUKF = zeros(Nsteps, 2); % Residuals (or innovations)
 
 for k=1:Nsteps
     % Let k denote the current time.
     %
     % Residuals (or innovations): Measured output - Predicted output
-    e(k, :) = yMeas(k, :) - vehicleMeasurementFcn(ekf.State); % ukf.State is x[k|k-1] at this point
+    eUKF(k, :) = yMeas(k, :) - vehicleMeasurementFcn(ukf.State); % ukf.State is x[k|k-1] at this point
     % Incorporate the measurements at time k into the state estimates by
     % using the "correct" command. This updates the State and StateCovariance
     % properties of the filter to contain x[k|k] and P[k|k]. These values
     % are also produced as the output of the "correct" command.
-    [xCorrectedUKF(k,:), PCorrected(k,:,:)] = correct(ekf,yMeas(k, :));
+    [xCorrectedUKF(k,:), PCorrectedUKF(k,:,:)] = correct(ukf,yMeas(k, :));
     % Predict the states at next time step, k+1. This updates the State and
     % StateCovariance properties of the filter to contain x[k+1|k] and
     % P[k+1|k]. These will be utilized by the filter at the next time step.
-    predict(ekf);
+    predict(ukf);
 end
-
 
 %% Plotting Figure 1
 figure();
 
 subplot(4,1,1);
-plot(timeVector, xTrue(:, 1), timeVector, xCorrectedUKF(:, 1));
+plot(timeVector, xTrue(:,1), timeVector, xCorrectedUKF(:,1));
 legend('True','UKF estimate')
 xlabel('Time [s]');
 ylabel('x_1 in km');
@@ -83,28 +79,28 @@ xlabel('Time [s]');
 ylabel('x_3 in km/s');
 
 subplot(4,1,4);
-plot(timeVector,xTrue(:,4),timeVector,xCorrectedUKF(:,4));
+plot(timeVector, xTrue(:,4),timeVector, xCorrectedUKF(:,4));
 legend('True','UKF estimate')
 xlabel('Time [s]');
 ylabel('x_4 in km/s');
 
 %% Plotting Figure 2
 figure();
-plot(timeVector, e);
+plot(timeVector, eUKF);
 subplot(2,1,1);
-plot(timeVector, e(:, 1));
+plot(timeVector, eUKF(:, 1));
 legend('True','UKF estimate')
 xlabel('Time [s]');
 ylabel('Residual (or innovation) in y1');
 
 subplot(2,1,2);
-plot(timeVector, e(:, 2));
+plot(timeVector, eUKF(:, 2));
 legend('True','UKF estimate')
 xlabel('Time [s]');
 ylabel('Residual (or innovation) in y2');
 
 %% Plotting Figure 3
-[xe,xeLags] = xcorr(e(:, 1),'coeff'); % 'coeff': normalize by the value at zero lag
+[xe,xeLags] = xcorr(eUKF(:, 1),'coeff'); % 'coeff': normalize by the value at zero lag
 % Only plot non-negative lags
 idx = xeLags>=0;
 figure();
@@ -118,22 +114,22 @@ eStates = xTrue-xCorrectedUKF;
 figure();
 subplot(2,1,1);
 semilogy(timeVector,eStates(:,1),...               % Error for the first state
-    timeVector, sqrt(PCorrected(:,1,1)),'r', ... % 1-sigma upper-bound
-    timeVector, -sqrt(PCorrected(:,1,1)),'r');   % 1-sigma lower-bound
+    timeVector, sqrt(PCorrectedUKF(:,1,1)),'r', ... % 1-sigma upper-bound
+    timeVector, -sqrt(PCorrectedUKF(:,1,1)),'r');   % 1-sigma lower-bound
 xlabel('Time [s]');
 ylabel('Error for state 1');
 title('State estimation errors');
 subplot(2,1,2);
 semilogy(timeVector,eStates(:,2),...               % Error for the second state
-    timeVector,sqrt(PCorrected(:,2,2)),'r', ...  % 1-sigma upper-bound
-    timeVector,-sqrt(PCorrected(:,2,2)),'r');    % 1-sigma lower-bound
+    timeVector,sqrt(PCorrectedUKF(:,2,2)),'r', ...  % 1-sigma upper-bound
+    timeVector,-sqrt(PCorrectedUKF(:,2,2)),'r');    % 1-sigma lower-bound
 xlabel('Time [s]');
 ylabel('Error for state 2');
 legend('State estimate','1-sigma uncertainty bound',...
     'Location','Best');
 
-distanceFromBound1 = abs(eStates(:,1))-sqrt(PCorrected(:,1,1));
+distanceFromBound1 = abs(eStates(:,1))-sqrt(PCorrectedUKF(:,1,1));
 percentageExceeded1 = nnz(distanceFromBound1>0) / numel(eStates(:,1));
-distanceFromBound2 = abs(eStates(:,2))-sqrt(PCorrected(:,2,2));
+distanceFromBound2 = abs(eStates(:,2))-sqrt(PCorrectedUKF(:,2,2));
 percentageExceeded2 = nnz(distanceFromBound2>0) / numel(eStates(:,2));
 [percentageExceeded1 percentageExceeded2]
